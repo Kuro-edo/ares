@@ -19,7 +19,7 @@ flowchart LR
     end
     router -- "LTE (LMT)<br>HTTP POST /locations<br>every minute" --> api
     subgraph server [Ubuntu 24.04 server]
-        api["FastAPI backend<br>:8000"] --> db[(SQLite)]
+        api["ares-backend container<br>:8000"] --> db[(SQLite)]
         nginx["Nginx<br>:80"] --> web["ares-web container<br>127.0.0.1:8080"]
     end
     browser[Web browser] -- map page --> nginx
@@ -51,12 +51,12 @@ and longitude from `/system gps` and sends them as JSON to the backend with
 - **Web**: a single HTML page with a Leaflet map on OpenStreetMap tiles. It shows
   the latest positions as markers with a clickable history list and refreshes
   every 30 seconds.
-- **Deployment**: an Ansible playbook sets up Nginx and a systemd service on
-  Ubuntu 24.04.
+- **Deployment**: GitHub Actions copies the project to an Ubuntu 24.04 server
+  over SSH and starts the backend and web containers with Docker Compose.
 
 Repository
 ----------
 
 - [`mikrotik/`](mikrotik/READM.md) has the router setup: LTE, NAT and GPS
 - [`poc/`](poc/README.md) is the proof of concept: backend API, map page and
-  Ansible deployment
+  Docker deployment

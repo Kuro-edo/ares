@@ -1,8 +1,0 @@
-services:
-  web:
-    build: .
-    image: ares-web
-    ports:
-      # Only reachable from the host; the host Nginx proxies port 80 to it.
-      - "127.0.0.1:8080:80"
-    restart: unless-stopped

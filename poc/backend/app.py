@@ -142,8 +142,7 @@ def list_locations(
     return [row_to_location(row) for row in kept]
 
 
-app.mount(
-    "/",
-    StaticFiles(directory=Path(__file__).resolve().parent.parent / "web", html=True),
-    name="web",
-)
+# Serve the map page when running from the repo; in Docker it has its own container.
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+if WEB_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")

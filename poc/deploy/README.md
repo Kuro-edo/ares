@@ -1,64 +1,32 @@
-Deploy with Ansible
-===================
+Deploy with Docker
+==================
 
-Deploys the backend and web page to an Ubuntu 24.04 server.
+Runs the backend and the web page as two containers on an Ubuntu 24.04 server,
+defined in [`poc/compose.yml`](../compose.yml):
 
-Requirements
-------------
+| Container      | Port                         | What                                   |
+| -------------- | ---------------------------- | -------------------------------------- |
+| `ares-backend` | `8000` (public)              | FastAPI API, SQLite in `/var/lib/ares` |
+| `ares-web`     | `127.0.0.1:8080` (localhost) | Nginx serving the map page             |
 
-On your machine:
-
-```sh
-sudo apt install pipx
-pipx install --include-deps ansible
-pipx ensurepath
-```
-
-Don't use `apt install ansible` on Ubuntu 22.04: that installs Ansible 2.10,
-which can't manage Ubuntu 24.04 servers (Python 3.12) and fails with
-`No module named 'ansible.module_utils.six.moves'`.
-
-The server needs SSH access for a user with `sudo`.
-
-Configure
----------
-
-The server address is not stored in the repo. `inventory.ini` reads it from
-environment variables:
-
-| Variable         | Required | Default  |
-| ---------------- | -------- | -------- |
-| `ARES_SERVER_IP` | yes      |          |
-| `ARES_SSH_USER`  | no       | `ubuntu` |
-
-```sh
-export ARES_SERVER_IP=192.0.2.10
-```
-
-Check that Ansible can reach the server:
-
-```sh
-ansible -i poc/deploy/inventory.ini ares -m ping
-```
-
-Run
----
-
-From the repo root:
-
-```sh
-ansible-playbook -i poc/deploy/inventory.ini poc/deploy/playbook.yml
-```
-
-Add `--ask-become-pass` (`-K`) if `sudo` asks for a password. Re-run the same
-command to deploy updates.
+Nginx on the host listens on port `80` and proxies to `127.0.0.1:8080`
+(`ares-nginx.conf`).
 
 GitHub Actions
 --------------
 
-`.github/workflows/deploy.yml` runs the playbook on every push to `main` that
-changes `poc/backend`, `poc/web` or `poc/deploy`, and on manual
-**Run workflow**. It uses the `production` environment. Configure in
+`.github/workflows/deploy.yml` deploys on every push to `main` that changes
+`poc/backend`, `poc/web`, `poc/deploy` or `poc/compose.yml`, and on manual
+**Run workflow**. It:
+
+1. Builds both images on the runner, so a broken Dockerfile fails early
+2. Copies `backend/`, `web/`, `deploy/` and `compose.yml` to `/opt/ares` over SSH
+3. Runs `deploy/deploy.sh` on the server with `sudo`
+
+`deploy.sh` installs Docker and Nginx if they are missing, runs
+`docker compose up -d --build`, installs the Nginx site and checks both ports.
+
+It uses the `production` environment. Configure in
 **Settings → Environments → production** (or at repository level):
 
 - Variable `ARES_SERVER_IP`: server address
@@ -67,19 +35,19 @@ changes `poc/backend`, `poc/web` or `poc/deploy`, and on manual
   `~/.ssh/authorized_keys`
 
 The SSH user needs passwordless `sudo` (the default `ubuntu` user on EC2 has it).
-The server's security group must allow SSH from GitHub-hosted runners.
+The server's security group must allow SSH from GitHub-hosted runners, and
+ports `80` and `8000` from clients.
 
-What it does
-------------
+Run by hand
+-----------
 
-- Installs `nginx`, `python3.12-venv`, `acl`, `docker.io` and `docker-compose-v2`
-- Creates the `ares` system user, `/opt/ares` and `/var/lib/ares`
-- Copies `backend/app.py`, `backend/requirements.txt` and `web/` (`index.html`,
-  `Dockerfile`, `compose.yml`)
-- Installs Python dependencies into `/opt/ares/backend/.venv`
-- Installs `ares.service` and the Nginx site, then starts both services
-- Builds the `ares-web` image and runs it with `docker compose`, published on
-  `127.0.0.1:8080`; Nginx on port 80 proxies to it
+From the repo root:
+
+```sh
+tar -C poc -cz backend web deploy compose.yml \
+  | ssh ubuntu@<server-ip> 'sudo mkdir -p /opt/ares && sudo tar -C /opt/ares -xz --no-same-owner'
+ssh ubuntu@<server-ip> 'sudo sh /opt/ares/deploy/deploy.sh'
+```
 
 Check
 -----
@@ -89,9 +57,10 @@ curl http://<server-ip>:8000/health
 curl -I http://<server-ip>/
 ```
 
-On the server, the container answers on localhost only:
+On the server:
 
 ```sh
-curl -I http://127.0.0.1:8080/
-sudo docker compose -f /opt/ares/web/compose.yml ps
+cd /opt/ares
+sudo docker compose ps
+sudo docker compose logs -f backend
 ```
