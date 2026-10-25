@@ -6,7 +6,6 @@ on:
     paths:
       - "poc/backend/**"
       - "poc/web/**"
-      - "poc/deploy/**"
       - "poc/compose.yml"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
@@ -17,50 +16,18 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # The containers run on the runner's own host.
+    runs-on: [self-hosted, Linux, ARM64]
     environment: production
-    env:
-      ARES_SERVER_IP: ${{ vars.ARES_SERVER_IP }}
-      ARES_SSH_USER: ${{ vars.ARES_SSH_USER || 'ubuntu' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check configuration
-        run: |
-          if [ -z "$ARES_SERVER_IP" ]; then
-            echo "::error::Set the ARES_SERVER_IP variable in the repository or production environment settings"
-            exit 1
-          fi
+      - name: Start containers
+        run: docker compose -f poc/compose.yml up -d --build --remove-orphans
 
-      - name: Build images
-        # Fail before touching the server if a Dockerfile is broken.
-        run: docker compose -f poc/compose.yml build
-
-      - name: Set up SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.id_agent }}
+      - name: Check
         run: |
-          install -m 700 -d ~/.ssh
-          # Strip CRs so keys pasted from Windows still parse.
-          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_agent
-          chmod 600 ~/.ssh/id_agent
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "::error::Secret id_agent is empty or not available to this job"
-            exit 1
-          fi
-          if ! ssh-keygen -y -f ~/.ssh/id_agent > /dev/null; then
-            # The header and line count are not secret and show what was pasted.
-            echo "First line: $(head -n1 ~/.ssh/id_agent)"
-            echo "Lines: $(wc -l < ~/.ssh/id_agent)"
-            echo "::error::Secret id_agent is not a valid private key"
-            exit 1
-          fi
-          echo "Deploy key: $(ssh-keygen -y -f ~/.ssh/id_agent | ssh-keygen -lf -)"
-          ssh-keyscan -H "$ARES_SERVER_IP" >> ~/.ssh/known_hosts
-
-      - name: Deploy
-        run: |
-          ssh="ssh -i $HOME/.ssh/id_agent -o ServerAliveInterval=15 -o ServerAliveCountMax=8 $ARES_SSH_USER@$ARES_SERVER_IP"
-          tar -C poc -cz backend web deploy compose.yml \
-            | $ssh 'sudo mkdir -p /opt/ares && sudo tar -C /opt/ares -xz --no-same-owner'
-          $ssh 'sudo sh /opt/ares/deploy/deploy.sh'
+          for url in http://127.0.0.1:8000/health http://127.0.0.1:8080/; do
+            curl -fsS --retry 10 --retry-delay 2 --retry-all-errors -o /dev/null "$url"
+            echo "OK $url"
+          done
