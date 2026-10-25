@@ -5,7 +5,7 @@
   tasks:
     - name: Install packages
       ansible.builtin.apt:
-        name: [nginx, python3.12-venv, acl]
+        name: [nginx, python3.12-venv, acl, docker.io, docker-compose-v2]
         update_cache: true
 
     - name: Create ares user
@@ -38,7 +38,12 @@
         dest: "/opt/ares/{{ item }}"
         owner: ares
         group: ares
-      loop: [backend/app.py, backend/requirements.txt, web/index.html]
+      loop:
+        - backend/app.py
+        - backend/requirements.txt
+        - web/index.html
+        - web/Dockerfile
+        - web/compose.yml
       notify: Restart ares
 
     - name: Install Python dependencies
@@ -80,7 +85,22 @@
         enabled: true
         state: started
         daemon_reload: true
-      loop: [ares, nginx]
+      loop: [docker, ares, nginx]
+
+    - name: Build and start web container
+      ansible.builtin.command:
+        cmd: docker compose up -d --build
+        chdir: /opt/ares/web
+      register: web_compose
+      changed_when: "'Started' in web_compose.stderr or 'Recreated' in web_compose.stderr"
+
+    - name: Check web page on localhost:8080
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+      register: web_check
+      retries: 5
+      delay: 2
+      until: web_check.status == 200
 
   handlers:
     - name: Restart ares

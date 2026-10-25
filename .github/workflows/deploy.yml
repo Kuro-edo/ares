@@ -31,6 +31,10 @@ jobs:
             exit 1
           fi
 
+      - name: Build web image
+        # Fail before touching the server if the Dockerfile is broken.
+        run: docker build -t ares-web poc/web
+
       - name: Install Ansible
         run: pipx install --include-deps ansible
 

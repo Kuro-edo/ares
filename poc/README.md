@@ -14,11 +14,12 @@ Python dependencies, and enables `ares.service` and Nginx. Re-run it to deploy
 updates. Pushes to `main` also deploy through GitHub Actions; see
 `poc/deploy/README.md`.
 
-The Python backend listens on port `8000`, and Nginx serves the map on port
-`80`. The map is available at `http://<server-ip>/`. Check both services:
+The Python backend listens on port `8000`. The map runs in the `ares-web`
+Docker container on `127.0.0.1:8080`, and Nginx proxies port `80` to it. The map is available at `http://<server-ip>/`. Check both services:
 
 ```sh
 curl http://127.0.0.1:8000/health
+curl -I http://127.0.0.1:8080/
 curl -I http://127.0.0.1/
 sudo journalctl -u ares.service -f
 ```

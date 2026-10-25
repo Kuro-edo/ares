@@ -20,7 +20,7 @@ flowchart LR
     router -- "LTE (LMT)<br>HTTP POST /locations<br>every minute" --> api
     subgraph server [Ubuntu 24.04 server]
         api["FastAPI backend<br>:8000"] --> db[(SQLite)]
-        nginx["Nginx<br>:80"]
+        nginx["Nginx<br>:80"] --> web["ares-web container<br>127.0.0.1:8080"]
     end
     browser[Web browser] -- map page --> nginx
     browser -- "GET /locations" --> api

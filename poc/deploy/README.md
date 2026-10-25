@@ -72,11 +72,14 @@ The server's security group must allow SSH from GitHub-hosted runners.
 What it does
 ------------
 
-- Installs `nginx`, `python3.12-venv` and `acl`
+- Installs `nginx`, `python3.12-venv`, `acl`, `docker.io` and `docker-compose-v2`
 - Creates the `ares` system user, `/opt/ares` and `/var/lib/ares`
-- Copies `backend/app.py`, `backend/requirements.txt` and `web/index.html`
+- Copies `backend/app.py`, `backend/requirements.txt` and `web/` (`index.html`,
+  `Dockerfile`, `compose.yml`)
 - Installs Python dependencies into `/opt/ares/backend/.venv`
 - Installs `ares.service` and the Nginx site, then starts both services
+- Builds the `ares-web` image and runs it with `docker compose`, published on
+  `127.0.0.1:8080`; Nginx on port 80 proxies to it
 
 Check
 -----
@@ -84,4 +87,11 @@ Check
 ```sh
 curl http://<server-ip>:8000/health
 curl -I http://<server-ip>/
+```
+
+On the server, the container answers on localhost only:
+
+```sh
+curl -I http://127.0.0.1:8080/
+sudo docker compose -f /opt/ares/web/compose.yml ps
 ```
