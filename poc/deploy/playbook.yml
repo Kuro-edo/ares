@@ -3,6 +3,12 @@
   become: true
 
   tasks:
+    # Finish any package install interrupted by an earlier dropped connection.
+    - name: Repair interrupted dpkg
+      ansible.builtin.command: dpkg --configure -a
+      register: dpkg_repair
+      changed_when: dpkg_repair.stdout | length > 0
+
     - name: Install packages
       ansible.builtin.apt:
         name: [nginx, python3.12-venv, acl, docker.io, docker-compose-v2]
