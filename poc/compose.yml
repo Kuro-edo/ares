@@ -1,0 +1,18 @@
+services:
+  backend:
+    build: backend
+    image: ares-backend
+    ports:
+      # Public: the MikroTik posts locations here and the map reads them.
+      - "8000:8000"
+    volumes:
+      - /var/lib/ares:/data
+    restart: unless-stopped
+
+  web:
+    build: web
+    image: ares-web
+    ports:
+      # Only reachable from the host; the host Nginx proxies port 80 to it.
+      - "127.0.0.1:8080:80"
+    restart: unless-stopped

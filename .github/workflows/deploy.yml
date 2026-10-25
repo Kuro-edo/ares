@@ -7,6 +7,7 @@ on:
       - "poc/backend/**"
       - "poc/web/**"
       - "poc/deploy/**"
+      - "poc/compose.yml"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ jobs:
     environment: production
     env:
       ARES_SERVER_IP: ${{ vars.ARES_SERVER_IP }}
-      ARES_SSH_USER: ${{ vars.ARES_SSH_USER }}
+      ARES_SSH_USER: ${{ vars.ARES_SSH_USER || 'ubuntu' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,12 +32,9 @@ jobs:
             exit 1
           fi
 
-      - name: Build web image
-        # Fail before touching the server if the Dockerfile is broken.
-        run: docker build -t ares-web poc/web
-
-      - name: Install Ansible
-        run: pipx install --include-deps ansible
+      - name: Build images
+        # Fail before touching the server if a Dockerfile is broken.
+        run: docker compose -f poc/compose.yml build
 
       - name: Set up SSH
         env:
@@ -60,10 +58,9 @@ jobs:
           echo "Deploy key: $(ssh-keygen -y -f ~/.ssh/id_agent | ssh-keygen -lf -)"
           ssh-keyscan -H "$ARES_SERVER_IP" >> ~/.ssh/known_hosts
 
-      - name: Run playbook
-        env:
-          ANSIBLE_PRIVATE_KEY_FILE: ~/.ssh/id_agent
-          # Survive transient SSH drops (e.g. during apt update) instead of failing as UNREACHABLE.
-          ANSIBLE_SSH_RETRIES: "5"
-          ANSIBLE_SSH_ARGS: "-C -o ControlMaster=auto -o ControlPersist=60s -o ServerAliveInterval=15 -o ServerAliveCountMax=8"
-        run: ansible-playbook -i poc/deploy/inventory.ini poc/deploy/playbook.yml
+      - name: Deploy
+        run: |
+          ssh="ssh -i $HOME/.ssh/id_agent -o ServerAliveInterval=15 -o ServerAliveCountMax=8 $ARES_SSH_USER@$ARES_SERVER_IP"
+          tar -C poc -cz backend web deploy compose.yml \
+            | $ssh 'sudo mkdir -p /opt/ares && sudo tar -C /opt/ares -xz --no-same-owner'
+          $ssh 'sudo sh /opt/ares/deploy/deploy.sh'
