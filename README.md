@@ -18,11 +18,11 @@ flowchart LR
         router["MikroTik RB912R-2nD-LTm<br>+ R11e-LTE modem"]
     end
     router -- "LTE (LMT)<br>HTTP POST /locations<br>every minute" --> api
-    subgraph server [Ubuntu 24.04 server]
+    subgraph server [Runner host]
         api["ares-backend container<br>:8000"] --> db[(SQLite)]
-        nginx["Nginx<br>:80"] --> web["ares-web container<br>127.0.0.1:8080"]
+        web["ares-web container<br>127.0.0.1:8080"]
     end
-    browser[Web browser] -- map page --> nginx
+    browser[Web browser] -- map page --> web
     browser -- "GET /locations" --> api
 ```
 
@@ -51,8 +51,8 @@ and longitude from `/system gps` and sends them as JSON to the backend with
 - **Web**: a single HTML page with a Leaflet map on OpenStreetMap tiles. It shows
   the latest positions as markers with a clickable history list and refreshes
   every 30 seconds.
-- **Deployment**: GitHub Actions copies the project to an Ubuntu 24.04 server
-  over SSH and starts the backend and web containers with Docker Compose.
+- **Deployment**: GitHub Actions starts the backend and web containers with
+  Docker Compose on the host of the self-hosted runner.
 
 Repository
 ----------
